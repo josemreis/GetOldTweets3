@@ -4,6 +4,12 @@ import json, re, datetime, sys, random, http.cookiejar
 import urllib.request, urllib.parse, urllib.error
 from pyquery import PyQuery
 from .. import models
+from expressvpn import wrapper
+import time
+from ratelimit import limits, sleep_and_retry
+import logging
+
+ONE_MINUTE = 60
 
 class TweetManager:
     """A class for accessing the Twitter's search engine"""
@@ -22,7 +28,7 @@ class TweetManager:
     ]
 
     @staticmethod
-    def getTweets(tweetCriteria, receiveBuffer=None, bufferLength=100, proxy=None, debug=False):
+    def getTweets(tweetCriteria, receiveBuffer=None, bufferLength=100, proxy=None, debug=True):
         """Get tweets that match the tweetCriteria parameter
         A static method.
 
@@ -65,7 +71,7 @@ class TweetManager:
                 json = TweetManager.getJsonResponse(tweetCriteria, refreshCursor, cookieJar, proxy, user_agent, debug=debug)
                 if len(json['items_html'].strip()) == 0:
                     break
-
+                
                 refreshCursor = json['min_position']
                 scrapedTweets = PyQuery(json['items_html'])
                 #Remove incomplete tweets withheld by Twitter Guidelines
@@ -269,9 +275,11 @@ class TweetManager:
                 match = attre.match(markup)
 
         return attr
-
+    
     @staticmethod
-    def getJsonResponse(tweetCriteria, refreshCursor, cookieJar, proxy, useragent=None, debug=False):
+    @sleep_and_retry
+    @limits(calls=30, period=ONE_MINUTE)
+    def getJsonResponse(tweetCriteria, refreshCursor, cookieJar, proxy, useragent=None, debug=True):
         """Invoke an HTTP query to Twitter.
         Should not be used as an API function. A static method.
         """
@@ -354,10 +362,34 @@ class TweetManager:
         try:
             response = opener.open(url)
             jsonResponse = response.read()
-        except Exception as e:
-            print("An error occured during an HTTP request:", str(e))
-            print("Try to open in browser: https://twitter.com/search?q=%s&src=typd" % urllib.parse.quote(urlGetData))
-            sys.exit()
+        except:
+            try:
+                ## change ip
+                print("Rotating ip!")
+                max_attempts = 5
+                attempts = 0
+                while True:
+                    attempts += 1
+                    try:
+                        logging.info('GETTING NEW IP')
+                        wrapper.random_connect()
+                        logging.info('SUCCESS')
+                        time.sleep(60)
+                        response = opener.open(url)
+                        jsonResponse = response.read()
+                        print(jsonResponse)
+                    except Exception as e:
+                        if attempts > max_attempts:
+                            logging.error('Max attempts reached for VPN. Check its configuration.')
+                            logging.error('Program will exit.')
+                            exit(1)
+                        logging.error(e)
+                        logging.error('Skipping exception.')
+        
+            except Exception as e:
+                print("An error occured during an HTTP request:", str(e))
+                print("Try to open in browser: https://twitter.com/search?q=%s&src=typd" % urllib.parse.quote(urlGetData))
+                sys.exit()
 
         try:
             s_json = jsonResponse.decode()
@@ -376,3 +408,6 @@ class TweetManager:
             print("---\n")
 
         return dataJson
+
+       
+       
