@@ -279,7 +279,7 @@ class TweetManager:
     @staticmethod
     @sleep_and_retry
     @limits(calls=30, period=ONE_MINUTE)
-    def getJsonResponse(tweetCriteria, refreshCursor, cookieJar, proxy, useragent=None, debug=True):
+    def getJsonResponse(tweetCriteria, refreshCursor, cookieJar, proxy, useragent=None, debug=True, rotate_ip=True):
         """Invoke an HTTP query to Twitter.
         Should not be used as an API function. A static method.
         """
@@ -364,27 +364,33 @@ class TweetManager:
             jsonResponse = response.read()
         except:
             try:
-                ## change ip
-                print("Rotating ip!")
-                max_attempts = 5
-                attempts = 0
-                while True:
-                    attempts += 1
-                    try:
-                        logging.info('GETTING NEW IP')
-                        wrapper.random_connect()
-                        logging.info('SUCCESS')
+                if rotate_ip:
+                    ## change ip
+                    print("Rotating ip!")
+                    max_attempts = 5
+                    attempts = 0
+                    while True:
+                        attempts += 1
+                        try:
+                            logging.info('GETTING NEW IP')
+                            wrapper.random_connect()
+                            logging.info('SUCCESS')
+                            time.sleep(60)
+                            response = opener.open(url)
+                            jsonResponse = response.read()
+                            if debug:
+                                print(jsonResponse)
+                        except Exception as e:
+                            if attempts > max_attempts:
+                                logging.error('Max attempts reached for VPN. Check its configuration.')
+                                logging.error('Program will exit.')
+                                exit(1)
+                            logging.error(e)
+                            logging.error('Skipping exception.')
+                    else:
                         time.sleep(60)
                         response = opener.open(url)
                         jsonResponse = response.read()
-                        print(jsonResponse)
-                    except Exception as e:
-                        if attempts > max_attempts:
-                            logging.error('Max attempts reached for VPN. Check its configuration.')
-                            logging.error('Program will exit.')
-                            exit(1)
-                        logging.error(e)
-                        logging.error('Skipping exception.')
         
             except Exception as e:
                 print("An error occured during an HTTP request:", str(e))
