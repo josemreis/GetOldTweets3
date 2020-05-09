@@ -8,6 +8,8 @@ from expressvpn import wrapper
 import time
 from ratelimit import limits, sleep_and_retry
 import logging
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 ONE_MINUTE = 60
 
@@ -388,7 +390,7 @@ class TweetManager:
                             logging.error(e)
                             logging.error('Skipping exception.')
                     else:
-                        time.sleep(60)
+                        time.sleep(900)
                         response = opener.open(url)
                         jsonResponse = response.read()
         
